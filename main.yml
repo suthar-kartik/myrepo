@@ -1,0 +1,100 @@
+# Setting host
+- hosts: localhost
+  gather_facts: false
+
+#Variables
+  vars:
+    ansible_python_interpreter: '{{ ansible_playbook_python }}'
+    image_name: hello-python
+    image_tag: latest
+    replicas: 1
+
+# Pre-Tasks to validate if Minikube is running
+  pre_tasks:
+    - name: Check Minikube's status.
+      command: minikube status
+      register: minikube_status
+      changed_when: false
+      ignore_errors: true
+    # Otherwise will start minikube
+    - name: Start Minikube if it's not running.
+      command: minikube start
+      when: "not minikube_status.stdout or 'Running' not in minikube_status.stdout"
+
+# Check existing images
+  tasks:
+    - name: Get existing image hash.
+      shell: |
+        eval $(minikube docker-env)
+        docker images -q {{ image_name }}
+      register: image_hash
+      changed_when: false
+
+# Otherwise will create an image from Dockerfile location
+    - name: Build image if it's not already built.
+      shell: |
+        eval $(minikube docker-env)
+        docker build -t {{ image_name }} ../GoProject 
+      when: not image_hash.stdout
+
+# Create Kubernetes resources to run Hello App.
+    - name: Create a Deployment for Hello App.
+      k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: hello-python
+            namespace: default
+          spec:
+            replicas: "{{ replicas }}"
+            selector:
+              matchLabels:
+                app: hello-python
+            template:
+              metadata:
+                labels:
+                  app: hello-python
+              spec:
+                containers:
+                - name: hello-python
+                  image: "{{ image_name }}:{{ image_tag }}"
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                  - containerPort: 8180
+
+# Create Kubernetes Service (DNS required)
+    - name: Create a Service for Hello App.
+      k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: hello-python
+            namespace: default
+          spec:
+            type: LoadBalancer
+            ports:
+            - port: 8180
+              targetPort: 8180
+            selector:
+              app: hello-python
+
+  post_tasks:
+    #Example export using minikube services
+    - name: Expose Hello App on the host via Minikube.
+      command: minikube service hello-python --url=true
+      changed_when: false
+      register: minikube_service
+    - debug:
+        msg: "Hello App URL: {{ minikube_service['stdout_lines'][0] }}"
+    - name: Verify Hello App is responding.
+      uri:
+        url: "{{ minikube_service['stdout_lines'][0] }}/test"
+        return_content: true
+      register: hello_python_response
+      failed_when: "'/test' not in hello_python_response.content"
+    - debug:
+        msg: "Testing URL Hello App Requested: {{hello_python_response.content}} Status: {{hello_python_response.status}}"
