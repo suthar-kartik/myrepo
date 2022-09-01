@@ -10,31 +10,31 @@
     replicas: 1
     
 # Create Kubernetes resources to run Hello App.
-    - name: Create a Deployment for Hello App.
-      k8s:
-        state: present
-        definition:
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: hello-python
-            namespace: default
-          spec:
-            replicas: "{{ replicas }}"
-            selector:
-              matchLabels:
+  - name: Create a Deployment for Hello App.
+    k8s:
+      state: present
+      definition:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: hello-python
+          namespace: default
+        spec:
+          replicas: "{{ replicas }}"
+          selector:
+            matchLabels:
+              app: hello-python
+          template:
+            metadata:
+              labels:
                 app: hello-python
-            template:
-              metadata:
-                labels:
-                  app: hello-python
-              spec:
-                containers:
-                - name: hello-python
-                  image: "{{ image_name }}:{{ image_tag }}"
-                  imagePullPolicy: IfNotPresent
-                  ports:
-                  - containerPort: 8000
+            spec:
+              containers:
+              - name: hello-python
+                image: "{{ image_name }}:{{ image_tag }}"
+                imagePullPolicy: IfNotPresent
+                ports:
+                - containerPort: 8000
 # Create Kubernetes Service (DNS required)
     - name: Create a Service for Hello App.
       k8s:
