@@ -36,4 +36,5 @@ spec:
   type: LoadBalancer
   ports:
   - port: 80
+    nodeport: 3113
     targetPort: 8080
